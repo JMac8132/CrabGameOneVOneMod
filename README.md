@@ -1,5 +1,5 @@
 * Commands:
-  * !start - Starts a 1v1 game if there are only 2 players in the lobby.
+  * !start - Starts a 1v1 game if there's only 2 players in the lobby.
   * ![playernumber]v[playernumber] - Starts a 1v1 game between the player numbers you choose. Replace "[playernumber]" with the desired player numbers. For example, type "!1v2" to start a game between player 1 and player 2.
   * !rematch - Starts a 1v1 game between the last two players who played against each other.
   * !resume [playernumber]v[playernumber] [score]-[score] - Resumes the game between the player numbers you choose with the given scores. Replace "[playernumber]" with the desired player numbers and "[score]-[score]" with the current score of each player. For example, type "!1v2 2-2" to resume a game between player 1 and player 2 with each player having a score of 2.
