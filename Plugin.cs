@@ -21,10 +21,11 @@ using Chatbox = MonoBehaviourPublicRaovTMinTemeColoonCoUnique;
 using ServerConfig = ObjectPublicInSiInInInInInInInInUnique;
 using Client = ObjectPublicBoInBoCSItBoInSiBySiUnique;
 using MapManager = MonoBehaviourPublicObInMamaLi1plMadeMaUnique;
+using ServerHandle = MonoBehaviourPublicPlVoUI9GaVoUI9UsPlUnique;
 
 namespace OneVOneMod
 {
-    [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, "1.0.0")]
+    [BepInPlugin(PluginInfo.PLUGIN_GUID, PluginInfo.PLUGIN_NAME, "1.1.0")]
     public class Plugin : BasePlugin
     {
         // Game state variables
@@ -192,6 +193,17 @@ namespace OneVOneMod
             ServerSend.LoadMap(randomMapID, 4);
         }
 
+        public static void CheckGameOver()
+        {
+            if (!IsHost() || gameState != 4) return;
+
+            if (alivePlayers.Count <= 1 || GameManager.Instance.activePlayers.Count == 1)
+            {
+                ServerSend.GameOver(0);
+                Debug.Log("Game Over");
+            }
+        }
+
         [HarmonyPatch(typeof(SteamManager), nameof(SteamManager.Start))]
         [HarmonyPostfix]
         public static void SteamManagerStart()
@@ -229,6 +241,7 @@ namespace OneVOneMod
                     player.Value.waitingReady = false;
                 }
             }
+
             if (gameState == 1 || gameState == 3 || gameState == 4 || gameState == 5 || gameState == 6)
             {
                 commandCoolDown += Time.deltaTime;
@@ -250,14 +263,24 @@ namespace OneVOneMod
             alivePlayers = GetAlivePlayers();
             gameTimer = __instance.freezeTimer.field_Private_Single_0;
 
-            if (gameState == 4)
+            if (gameState != 4) return;
+
+            CheckGameOver();
+
+            // Check If Player Is Trying To Glitch
+            foreach (ulong id in playerDictionary.Keys)
             {
-                // Check If Player Is Trying To Glitch
-                foreach (ulong id in playerDictionary.Keys)
-                {
-                    CheckPosition(id);
-                }
+                CheckPosition(id);
             }
+        }
+
+        [HarmonyPatch(typeof(ServerHandle), nameof(ServerHandle.GameRequestToSpawn))]
+        [HarmonyPrefix]
+        public static void ServerHandleGameRequestToSpawn(ulong param_0)
+        {
+            if (!IsHost()) return;
+            if (playerDictionary.ContainsKey(param_0)) LobbyManager.Instance.GetClient(param_0).field_Public_Boolean_0 = true; // active player
+            else LobbyManager.Instance.GetClient(param_0).field_Public_Boolean_0 = false; // active player
         }
 
         [HarmonyPatch(typeof(GameMode), nameof(GameMode.Init))]
@@ -269,6 +292,29 @@ namespace OneVOneMod
             LobbyManager.Instance.gameMode.shortModeTime = roundTime;
             LobbyManager.Instance.gameMode.longModeTime = roundTime;
             LobbyManager.Instance.gameMode.mediumModeTime = roundTime;
+        }
+
+        [HarmonyPatch(typeof(GameLoop), nameof(GameLoop.CheckGameOver))]
+        [HarmonyPrefix]
+        public static bool GameLoopCheckGameOver()
+        {
+            if (!IsHost() || GetModeID() != 4) return true;
+            return false;
+        }
+
+        [HarmonyPatch(typeof(GameModeTag), nameof(GameModeTag.CheckGameOver))]
+        [HarmonyPrefix]
+        public static bool GameModeTagCheckGameOver()
+        {
+            if (!IsHost() || GetModeID() != 4) return true;
+            return false;
+        }
+
+        [HarmonyPatch(typeof(ServerSend), nameof(ServerSend.TagPlayer))]
+        [HarmonyPostfix]
+        public static void ServerSendTagPlayer(ulong param_1)
+        {
+            taggedPlayer = param_1;
         }
 
         [HarmonyPatch(typeof(GameModeTag), nameof(GameModeTag.OnFreezeOver))]
@@ -283,13 +329,6 @@ namespace OneVOneMod
             GameServer.ForceGiveWeapon(randomPlayer, 10, 0);
             firstTaggedPlayer = randomPlayer;
             return false;
-        }
-
-        [HarmonyPatch(typeof(ServerSend), nameof(ServerSend.TagPlayer))]
-        [HarmonyPostfix]
-        public static void ServerSendTagPlayer(ulong param_1)
-        {
-            taggedPlayer = param_1;
         }
 
         [HarmonyPatch(typeof(GameModeTag), nameof(GameModeTag.OnRoundOver))]
@@ -342,7 +381,6 @@ namespace OneVOneMod
             else
             {
                 ChangeMap();
-                //GameLoop.Instance.NextGame();
             }
             return false;
         }
@@ -374,24 +412,9 @@ namespace OneVOneMod
             if (gameState == 6 && playerDictionary.ElementAt(0).Value < scoreToWin && playerDictionary.ElementAt(1).Value < scoreToWin)
             {
                 ChangeMap();
-                //GameLoop.Instance.NextGame();
                 return false;
             }
             else return true;
-        }
-
-        [HarmonyPatch(typeof(ServerSend), nameof(ServerSend.LoadMap), new System.Type[] { typeof(int), typeof(int) })]
-        [HarmonyPrefix]
-        public static void ServerSendLoadMap(int param_1)
-        {
-            if (!IsHost() || param_1 != 4) return;
-            foreach (var player in GameManager.Instance.activePlayers)
-            {
-                Client client = LobbyManager.Instance.GetClient(player.Key);
-                if (player.Value == null || client == null) continue;
-                if (playerDictionary.ContainsKey(player.Key)) client.field_Public_Boolean_0 = true;
-                else client.field_Public_Boolean_0 = false;
-            }
         }
 
         [HarmonyPatch(typeof(GameServer), nameof(GameServer.ForceGiveWeapon))]
